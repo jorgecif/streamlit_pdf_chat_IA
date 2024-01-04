@@ -9,17 +9,16 @@ import PIL.Image
 from streamlit_option_menu import option_menu
 from streamlit_extras.let_it_rain import rain
 import base64
-from streamlit_javascript import st_javascript
 
 
 
 
 # Load secrets deploy - OpenAI API key
-#openai_api_key=st.secrets["OPENAI_API_KEY"] # Opción para Streamlit share
+openai_api_key=st.secrets["OPENAI_API_KEY"] # Opción para Streamlit share
 
 # Load secrets local
-from dotenv import load_dotenv
-load_dotenv()
+#from dotenv import load_dotenv
+#load_dotenv()
 
 
 # Page features
@@ -52,7 +51,7 @@ def success():
 	)
 
 # Function to visualize PDF
-def displayPDF(upl_file, ui_width):
+def displayPDF(upl_file):
     # Read file as bytes:
     bytes_data = upl_file.getvalue()
 
@@ -60,7 +59,7 @@ def displayPDF(upl_file, ui_width):
     base64_pdf = base64.b64encode(bytes_data).decode("utf-8")
 
     # Embed PDF in HTML
-    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width={str(ui_width)} height={str(ui_width*4/3)} type="application/pdf"></iframe>'
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width=100% height=500px type="application/pdf"></iframe>'
 
     # Display file
     st.markdown(pdf_display, unsafe_allow_html=True)
@@ -69,19 +68,19 @@ def displayPDF(upl_file, ui_width):
 image = PIL.Image.open('logo_blanco.png')
 st.sidebar.image(image, width=None, use_column_width=None)
 
-st.header("Analiza tu PDF 💬")
 
+st.header("Analiza tu PDF 💬")
 
 
 def main():
     # Title and header
 
     # extract the text
-    pdf = st.sidebar.file_uploader("Sube tu documento", type=['pdf'] )
+    pdf = st.sidebar.file_uploader("Sube un documento en formato .pdf", type=['pdf'] )
 
     if pdf is not None:
-        ui_width = st_javascript("window.innerWidth")
-        displayPDF(pdf, ui_width -10)
+        #ui_width = st_javascript("window.innerWidth")
+        displayPDF(pdf)
 
         pdf_reader = PdfReader(pdf)
         text = ""
