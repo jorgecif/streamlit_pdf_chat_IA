@@ -7,3 +7,6 @@ tiktoken
 faiss-cpu
 streamlit-option-menu==0.3.2
 streamlit-extras==0.2.7
+streamlit-javascript
+streamlit-chat==0.0.2.2
+

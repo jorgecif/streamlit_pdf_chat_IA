@@ -8,9 +8,20 @@ from langchain.llms import OpenAI
 import PIL.Image
 from streamlit_option_menu import option_menu
 from streamlit_extras.let_it_rain import rain
+import base64
+from streamlit_chat import message
+from streamlit_javascript import st_javascript
 
-# Load secrets - OpenAI API key
-openai_api_key=st.secrets["OPENAI_API_KEY"] # Opción para Streamlit share
+
+
+
+# Load secrets deploy - OpenAI API key
+#openai_api_key=st.secrets["OPENAI_API_KEY"] # Opción para Streamlit share
+
+# Load secrets local
+from dotenv import load_dotenv
+load_dotenv()
+
 
 # Page features
 st.set_page_config(
@@ -41,46 +52,76 @@ def success():
 		animation_length=1, #'infinite'
 	)
 
+# Function to visualize PDF
+def displayPDF(upl_file, ui_width):
+    # Read file as bytes:
+    bytes_data = upl_file.getvalue()
 
+    # Convert to utf-8
+    base64_pdf = base64.b64encode(bytes_data).decode("utf-8")
+
+    # Embed PDF in HTML
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width={str(ui_width)} height={str(ui_width*4/3)} type="application/pdf"></iframe>'
+
+    # Display file
+    st.markdown(pdf_display, unsafe_allow_html=True)
 
 # Logo sidebar
 image = PIL.Image.open('logo_blanco.png')
 st.sidebar.image(image, width=None, use_column_width=None)
 
+st.header("Analiza tu PDF 💬")
 
-# Title and header
-st.set_page_config(page_title="Ask Your PDF")
-st.set_page_config(page_title="Ask Your PDF")
-st.header("Ask your PDF 💬")
 
-# extract the text
-pdf = st.file_uploader("Upload your PDF", type="pdf")
 
-if pdf is not None:
-    pdf_reader = PdfReader(pdf)
-    text = ""
-    for page in pdf_reader.pages:
-        text += page.extract_text()
+def main():
+    # Title and header
 
-    # split into chunks
-    text_splitter = CharacterTextSplitter(
-        separator="\n",
-        chunk_size=1000,
-        chunk_overlap=200,
-        length_function=len
-    )
-    chunks = text_splitter.split_text(text)
+    # extract the text
+    pdf = st.sidebar.file_uploader("Sube tu documento", type=['pdf'] )
 
-    embeddings = OpenAIEmbeddings()
-    knowledge_base = FAISS.from_texts(chunks, embeddings)
+    if pdf is not None:
+        ui_width = st_javascript("window.innerWidth")
+        displayPDF(pdf, ui_width -10)
 
-    user_question = st.text_input("Ask a question about your PDF")
-    if user_question:
-        docs = knowledge_base.similarity_search(user_question)
+        pdf_reader = PdfReader(pdf)
+        text = ""
+        for page in pdf_reader.pages:
+            text += page.extract_text()
 
-        llm = OpenAI()
-        chain = load_qa_chain(llm, chain_type="stuff")
-        response = chain.run(input_documents=docs, question=user_question)
-        success()
+        # Simple numbers about pdf
+        n_pages= len(pdf_reader.pages)
+        n_char=len(text)
+        n_words=len(text.split())
+        st.sidebar.write("Número de páginas ", n_pages)
+        st.sidebar.write("Número de caracteres ", n_char)
+        st.sidebar.write("Número de palabras ", n_words)
 
-        st.write(response)
+        # split into chunks
+        text_splitter = CharacterTextSplitter(
+            separator="\n",
+            chunk_size=1000,
+            chunk_overlap=200,
+            length_function=len
+        )
+        chunks = text_splitter.split_text(text)
+
+        embeddings = OpenAIEmbeddings()
+        knowledge_base = FAISS.from_texts(chunks, embeddings)
+
+        user_question = st.chat_input("Qué quieres saber de tu documento?")
+        
+        if user_question:
+            docs = knowledge_base.similarity_search(user_question)
+
+            llm = OpenAI()
+            chain = load_qa_chain(llm, chain_type="stuff")
+            response = chain.run(input_documents=docs, question=user_question)
+            success()
+
+            st.write(response)
+
+
+if __name__ == '__main__':
+    main()
+
