@@ -13,7 +13,6 @@ client = OpenAI(
 )
 
 def main():
-    load_dotenv()
     st.set_page_config(page_title="Ask Your PDF")
     st.header("Ask your PDF 💬")
 
