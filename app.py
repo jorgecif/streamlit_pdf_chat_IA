@@ -9,7 +9,6 @@ import PIL.Image
 from streamlit_option_menu import option_menu
 from streamlit_extras.let_it_rain import rain
 import base64
-from streamlit_chat import message
 from streamlit_javascript import st_javascript
 
 
