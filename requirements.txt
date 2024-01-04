@@ -3,4 +3,3 @@ openai
 streamlit
 pypdf2
 tiktoken
-faiss
