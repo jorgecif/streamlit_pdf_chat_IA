@@ -72,54 +72,51 @@ st.sidebar.image(image, width=None, use_column_width=None)
 st.header("Analiza tu PDF 💬")
 
 
-def main():
-    # Title and header
 
-    # extract the text
-    pdf = st.sidebar.file_uploader("Sube un documento en formato .pdf", type=['pdf'] )
+# Title and header
 
-    if pdf is not None:
-        #ui_width = st_javascript("window.innerWidth")
-        displayPDF(pdf)
+# extract the text
+pdf = st.sidebar.file_uploader("Sube un documento en formato .pdf", type=['pdf'] )
 
-        pdf_reader = PdfReader(pdf)
-        text = ""
-        for page in pdf_reader.pages:
-            text += page.extract_text()
+if pdf is not None:
+    #ui_width = st_javascript("window.innerWidth")
+    displayPDF(pdf)
 
-        # Simple numbers about pdf
-        n_pages= len(pdf_reader.pages)
-        n_char=len(text)
-        n_words=len(text.split())
-        st.sidebar.write("Número de páginas ", n_pages)
-        st.sidebar.write("Número de caracteres ", n_char)
-        st.sidebar.write("Número de palabras ", n_words)
+    pdf_reader = PdfReader(pdf)
+    text = ""
+    for page in pdf_reader.pages:
+        text += page.extract_text()
 
-        # split into chunks
-        text_splitter = CharacterTextSplitter(
-            separator="\n",
-            chunk_size=1000,
-            chunk_overlap=200,
-            length_function=len
-        )
-        chunks = text_splitter.split_text(text)
+    # Simple numbers about pdf
+    n_pages= len(pdf_reader.pages)
+    n_char=len(text)
+    n_words=len(text.split())
+    st.sidebar.write("Número de páginas ", n_pages)
+    st.sidebar.write("Número de caracteres ", n_char)
+    st.sidebar.write("Número de palabras ", n_words)
 
-        embeddings = OpenAIEmbeddings()
-        knowledge_base = FAISS.from_texts(chunks, embeddings)
+    # split into chunks
+    text_splitter = CharacterTextSplitter(
+        separator="\n",
+        chunk_size=1000,
+        chunk_overlap=200,
+        length_function=len
+    )
+    chunks = text_splitter.split_text(text)
 
-        user_question = st.chat_input("Qué quieres saber de tu documento?")
-        
-        if user_question:
-            docs = knowledge_base.similarity_search(user_question)
+    embeddings = OpenAIEmbeddings()
+    knowledge_base = FAISS.from_texts(chunks, embeddings)
 
-            llm = OpenAI()
-            chain = load_qa_chain(llm, chain_type="stuff")
-            response = chain.run(input_documents=docs, question=user_question)
-            success()
+    user_question = st.chat_input("Qué quieres saber de tu documento?")
+    
+    if user_question:
+        docs = knowledge_base.similarity_search(user_question)
 
-            st.write(response)
+        llm = OpenAI()
+        chain = load_qa_chain(llm, chain_type="stuff")
+        response = chain.run(input_documents=docs, question=user_question)
+        success()
 
+        st.write(response)
 
-if __name__ == '__main__':
-    main()
 
