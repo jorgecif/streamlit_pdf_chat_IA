@@ -69,14 +69,22 @@ image = PIL.Image.open('logo_blanco.png')
 st.sidebar.image(image, width=None, use_column_width=None)
 
 
-st.header("Analiza tu PDF 💬")
+st.header("Pregúntale a tu PDF 💬")
 
 
 
-# Title and header
 
-# extract the text
+# Upload  file
 pdf = st.sidebar.file_uploader("Sube un documento en formato .pdf", type=['pdf'] )
+
+# Initialize chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Display chat messages from history on app rerun
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
 if pdf is not None:
     #ui_width = st_javascript("window.innerWidth")
@@ -108,15 +116,20 @@ if pdf is not None:
     knowledge_base = FAISS.from_texts(chunks, embeddings)
 
     user_question = st.chat_input("Qué quieres saber de tu documento?")
-    
+   
     if user_question:
+        st.chat_message("user").markdown(user_question)
+        # Add user message to chat history
+        st.session_state.messages.append({"role": "user", "content": user_question})
         docs = knowledge_base.similarity_search(user_question)
 
         llm = OpenAI()
         chain = load_qa_chain(llm, chain_type="stuff")
         response = chain.run(input_documents=docs, question=user_question)
         success()
+        with st.chat_message("assistant"):
+            st.markdown(response)
+        st.session_state.messages.append({"role": "assistant", "content": response})
 
-        st.write(response)
 
 
