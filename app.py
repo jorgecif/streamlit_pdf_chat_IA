@@ -66,7 +66,7 @@ def displayPDF(upl_file):
 
 # Logo sidebar
 image = PIL.Image.open('logo_blanco.png')
-st.sidebar.image(image, use_column_width=True)
+st.sidebar.image(image, use_container_width =True)
 
 
 st.header("Pregúntale a tu PDF 💬")
