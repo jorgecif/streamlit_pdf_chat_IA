@@ -9,13 +9,11 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_community.document_loaders import (
     UnstructuredFileLoader,
-    ImageCaptionLoader,
 )
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.chains import ConversationalRetrievalChain
-from langchain.docstore.document import Document
-
+from langchain_core.documents import Document
 import pytube
 
 
@@ -34,7 +32,7 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 st.header("Sube tu archivo y haz tus preguntas")
 st.subheader(
-    "Tipos de archivo soportados: PDF / DOCX / TXT / JPG / PNG / YouTube"
+    "Tipos de archivo soportados: PDF / DOCX / TXT / YouTube"
 )
 
 # -------------------------
@@ -115,16 +113,14 @@ if uploaded_files or youtube_url:
                 try:
 
                     if file_path.lower().endswith(
-                        (".png", ".jpg", ".jpeg")
+                        (".pdf", ".docx", ".txt")
                     ):
-
-                        image_loader = ImageCaptionLoader(
-                            path_images=[file_path]
-                        )
-
-                        image_documents = image_loader.load()
-
-                        documents.extend(image_documents)
+                    
+                        loader = UnstructuredFileLoader(file_path)
+                    
+                        loaded_documents = loader.load()
+                    
+                        documents.extend(loaded_documents)
 
                     elif file_path.lower().endswith(
                         (".pdf", ".docx", ".txt")
