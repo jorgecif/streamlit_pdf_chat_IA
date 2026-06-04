@@ -1,136 +1,303 @@
+import os
 import streamlit as st
-from PyPDF2 import PdfReader
-#from langchain.text_splitter import CharacterTextSplitter
-from langchain_text_splitters import CharacterTextSplitter
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.chains.question_answering import load_qa_chain
-from langchain.llms import OpenAI
-import PIL.Image
-from streamlit_option_menu import option_menu
-from streamlit_extras.let_it_rain import rain
-import base64
 
+from openai import OpenAI
 
+from langchain_openai import ChatOpenAI
+from langchain_openai import OpenAIEmbeddings
 
-
-# Load secrets deploy - OpenAI API key
-openai_api_key=st.secrets["OPENAI_API_KEY"] # Opción para Streamlit share
-
-# Load secrets local
-#from dotenv import load_dotenv
-#load_dotenv()
-
-
-# Page features
-st.set_page_config(
-    page_title="Herramientas AI - Qüid Lab",
-    page_icon="random",
-    layout="centered",
-    initial_sidebar_state="expanded",
+from langchain_community.vectorstores import Chroma
+from langchain_community.document_loaders import (
+    UnstructuredFileLoader,
+    ImageCaptionLoader,
 )
 
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.chains import ConversationalRetrievalChain
+from langchain.docstore.document import Document
 
-# Style
-hide_streamlit_style = """
-				<style>
-				#MainMenu {visibility: hidden;}
-
-				footer {visibility: hidden;}
-				</style>
-				"""
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+import pytube
 
 
-# Function success
-def success():
-	rain(
-		emoji="🎈",
-		font_size=54,
-		falling_speed=5,
-		animation_length=1, #'infinite'
-	)
+# -------------------------
+# Configuración OpenAI
+# -------------------------
 
-# Function to visualize PDF
-def displayPDF(upl_file):
-    # Read file as bytes:
-    bytes_data = upl_file.getvalue()
+OPENAI_API_KEY = st.secrets["openai_api_key"]
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
-    # Convert to utf-8
-    base64_pdf = base64.b64encode(bytes_data).decode("utf-8")
+client = OpenAI(api_key=OPENAI_API_KEY)
 
-    # Embed PDF in HTML
-    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width=100% height=300px type="application/pdf"></iframe>'
+# -------------------------
+# Interfaz
+# -------------------------
 
-    # Display file
-    st.sidebar.markdown(pdf_display, unsafe_allow_html=True)
+st.header("Sube tu archivo y haz tus preguntas")
+st.subheader(
+    "Tipos de archivo soportados: PDF / DOCX / TXT / JPG / PNG / YouTube"
+)
 
-# Logo sidebar
-image = PIL.Image.open('logo_blanco.png')
-st.sidebar.image(image, use_container_width =True)
+# -------------------------
+# Modelo LLM
+# -------------------------
+
+llm = ChatOpenAI(
+    model="gpt-4o-mini",
+    temperature=0,
+    streaming=True,
+)
+
+# -------------------------
+# Funciones auxiliares
+# -------------------------
 
 
-st.header("Pregúntale a tu PDF 💬")
+def load_version_history():
+    try:
+        with open("version_history.txt", "r", encoding="utf-8") as file:
+            return file.read()
+    except FileNotFoundError:
+        return "No version history available."
 
 
+# -------------------------
+# Sidebar
+# -------------------------
 
+with st.sidebar:
 
-# Upload  file
-pdf = st.sidebar.file_uploader("Sube un documento en formato .pdf", type=['pdf'] )
-
-# Initialize chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# Display chat messages from history on app rerun
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-if pdf is not None:
-    #ui_width = st_javascript("window.innerWidth")
-    displayPDF(pdf)
-
-    pdf_reader = PdfReader(pdf)
-    text = ""
-    for page in pdf_reader.pages:
-        text += page.extract_text()
-
-    # Simple numbers about pdf
-    n_pages= len(pdf_reader.pages)
-    n_char=len(text)
-    n_words=len(text.split())
-    st.sidebar.write("Número de páginas ", n_pages)
-    st.sidebar.write("Número de caracteres ", n_char)
-    st.sidebar.write("Número de palabras ", n_words)
-
-    # split into chunks
-    text_splitter = CharacterTextSplitter(
-        separator="\n",
-        chunk_size=1000,
-        chunk_overlap=200,
-        length_function=len
+    uploaded_files = st.file_uploader(
+        "Please upload your files",
+        accept_multiple_files=True,
     )
-    chunks = text_splitter.split_text(text)
 
-    embeddings = OpenAIEmbeddings()
-    knowledge_base = FAISS.from_texts(chunks, embeddings)
+    youtube_url = st.text_input("YouTube URL")
 
-    user_question = st.chat_input("Qué quieres saber de tu documento?")
-   
-    if user_question:
-        st.chat_message("user").markdown(user_question)
-        # Add user message to chat history
-        st.session_state.messages.append({"role": "user", "content": user_question})
-        docs = knowledge_base.similarity_search(user_question)
+    with st.expander("Version History"):
+        st.write(load_version_history())
 
-        llm = OpenAI()
-        chain = load_qa_chain(llm, chain_type="stuff")
-        response = chain.run(input_documents=docs, question=user_question)
-        success()
+    st.info(
+        "Refresh the browser if you want to start a completely new session.",
+        icon="ℹ️",
+    )
+
+# -------------------------
+# Procesamiento
+# -------------------------
+
+if uploaded_files or youtube_url:
+
+    st.write(
+        f"Number of files uploaded: "
+        f"{len(uploaded_files) if uploaded_files else 0}"
+    )
+
+    if "processed_data" not in st.session_state:
+
+        documents = []
+
+        # -------------------------
+        # Archivos cargados
+        # -------------------------
+
+        if uploaded_files:
+
+            for uploaded_file in uploaded_files:
+
+                file_path = os.path.join(
+                    os.getcwd(),
+                    uploaded_file.name,
+                )
+
+                with open(file_path, "wb") as f:
+                    f.write(uploaded_file.getvalue())
+
+                try:
+
+                    if file_path.lower().endswith(
+                        (".png", ".jpg", ".jpeg")
+                    ):
+
+                        image_loader = ImageCaptionLoader(
+                            path_images=[file_path]
+                        )
+
+                        image_documents = image_loader.load()
+
+                        documents.extend(image_documents)
+
+                    elif file_path.lower().endswith(
+                        (".pdf", ".docx", ".txt")
+                    ):
+
+                        loader = UnstructuredFileLoader(file_path)
+
+                        loaded_documents = loader.load()
+
+                        documents.extend(loaded_documents)
+
+                except Exception as e:
+                    st.error(
+                        f"Error procesando {uploaded_file.name}: {str(e)}"
+                    )
+
+        # -------------------------
+        # YouTube
+        # -------------------------
+
+        if youtube_url:
+
+            try:
+
+                youtube_video = pytube.YouTube(youtube_url)
+
+                stream = (
+                    youtube_video.streams
+                    .filter(only_audio=True)
+                    .first()
+                )
+
+                stream.download(
+                    filename="youtube_audio.mp4"
+                )
+
+                with open(
+                    "youtube_audio.mp4",
+                    "rb"
+                ) as audio_file:
+
+                    transcript = (
+                        client.audio.transcriptions.create(
+                            model="whisper-1",
+                            file=audio_file,
+                        )
+                    )
+
+                youtube_document = Document(
+                    page_content=transcript.text,
+                    metadata={"source": youtube_url},
+                )
+
+                documents.append(youtube_document)
+
+            except Exception as e:
+                st.error(
+                    f"Error procesando YouTube: {str(e)}"
+                )
+
+        # -------------------------
+        # Validación
+        # -------------------------
+
+        if not documents:
+            st.warning(
+                "No se pudo extraer contenido de los archivos."
+            )
+            st.stop()
+
+        # -------------------------
+        # Chunking
+        # -------------------------
+
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1500,
+            chunk_overlap=150,
+        )
+
+        document_chunks = text_splitter.split_documents(
+            documents
+        )
+
+        embeddings = OpenAIEmbeddings()
+
+        vectorstore = Chroma.from_documents(
+            document_chunks,
+            embeddings,
+        )
+
+        st.session_state.processed_data = {
+            "document_chunks": document_chunks,
+            "vectorstore": vectorstore,
+        }
+
+    else:
+
+        document_chunks = (
+            st.session_state.processed_data[
+                "document_chunks"
+            ]
+        )
+
+        vectorstore = (
+            st.session_state.processed_data[
+                "vectorstore"
+            ]
+        )
+
+    # -------------------------
+    # QA Chain
+    # -------------------------
+
+    qa = ConversationalRetrievalChain.from_llm(
+        llm=llm,
+        retriever=vectorstore.as_retriever(),
+    )
+
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    for message in st.session_state.messages:
+
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # -------------------------
+    # Chat
+    # -------------------------
+
+    if prompt := st.chat_input("Haz tu pregunta"):
+
+        st.session_state.messages.append(
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        )
+
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        result = qa(
+            {
+                "question": prompt,
+                "chat_history": st.session_state.chat_history,
+            }
+        )
+
+        answer = result["answer"]
+
+        st.session_state.chat_history.append(
+            (
+                prompt,
+                answer,
+            )
+        )
+
         with st.chat_message("assistant"):
-            st.markdown(response)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+            st.markdown(answer)
 
+        st.session_state.messages.append(
+            {
+                "role": "assistant",
+                "content": answer,
+            }
+        )
 
+else:
 
+    st.write(
+        "Carga archivos o proporciona una URL de YouTube."
+    )
