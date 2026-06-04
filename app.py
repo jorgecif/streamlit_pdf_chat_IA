@@ -18,7 +18,7 @@ import pytube
 
 
 # -------------------------
-# Configuración OpenAI
+# Configuración OpenAI 
 # -------------------------
 
 OPENAI_API_KEY = st.secrets["openai_api_key"]
