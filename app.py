@@ -11,7 +11,7 @@ from langchain_community.document_loaders import (
     UnstructuredFileLoader,
 )
 
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.chains import ConversationalRetrievalChain
 from langchain_core.documents import Document
 import pytube
