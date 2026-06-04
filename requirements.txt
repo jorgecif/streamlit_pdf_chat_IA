@@ -7,5 +7,4 @@ chromadb
 unstructured
 python-docx
 pypdf
-pillow
 pytube
